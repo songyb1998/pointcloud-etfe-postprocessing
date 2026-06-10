@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import math
 import unittest
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+from pointcloud_etfe_postprocessing.cli import build_parser
 from pointcloud_etfe_postprocessing.config import GridConfig
 from pointcloud_etfe_postprocessing.displacement import calculate_displacements
 from pointcloud_etfe_postprocessing.mesh import renumber_grid_points, structured_grid_elements
@@ -67,7 +69,10 @@ class CoreCalculationTests(unittest.TestCase):
         self.assertTrue(math.isclose(strain.loc[0, "epsilon1"], math.log(1.1), rel_tol=1e-10))
         self.assertTrue(math.isclose(strain.loc[0, "epsilon2"], math.log(1.1), rel_tol=1e-10))
 
+    def test_batch_defaults_to_raw_data_directory(self) -> None:
+        args = build_parser().parse_args(["batch"])
+        self.assertEqual(args.data_dir, Path("data/raw"))
+
 
 if __name__ == "__main__":
     unittest.main()
-
