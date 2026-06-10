@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import math
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -12,6 +14,7 @@ from pointcloud_etfe_postprocessing.config import GridConfig
 from pointcloud_etfe_postprocessing.displacement import calculate_displacements
 from pointcloud_etfe_postprocessing.mesh import renumber_grid_points, structured_grid_elements
 from pointcloud_etfe_postprocessing.strain import calculate_element_strain
+from pointcloud_etfe_postprocessing.workflows import WorkflowOutputs, run_batch_displacement_workflow
 
 
 class CoreCalculationTests(unittest.TestCase):
@@ -72,6 +75,26 @@ class CoreCalculationTests(unittest.TestCase):
     def test_batch_defaults_to_raw_data_directory(self) -> None:
         args = build_parser().parse_args(["batch"])
         self.assertEqual(args.data_dir, Path("data/raw"))
+
+    def test_batch_workflow_skips_reference_and_failure_workbook(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_dir = Path(temp_dir)
+            reference = data_dir / "zxt_300Pa.xlsx"
+            reference.touch()
+            (data_dir / "zxt_1000Pa.xlsx").touch()
+            (data_dir / "zxt_14000Pa_failure.xlsx").touch()
+
+            calls: list[Path] = []
+
+            def fake_displacement(reference_path: Path, target_path: Path, *_args, **_kwargs) -> WorkflowOutputs:
+                calls.append(Path(target_path))
+                return WorkflowOutputs([Path("dummy.csv")])
+
+            with patch("pointcloud_etfe_postprocessing.workflows.run_displacement_workflow", fake_displacement):
+                outputs = run_batch_displacement_workflow(data_dir, Path("outputs"), reference_path=reference)
+
+            self.assertEqual(calls, [data_dir / "zxt_1000Pa.xlsx"])
+            self.assertEqual(outputs.paths, [Path("dummy.csv")])
 
 
 if __name__ == "__main__":

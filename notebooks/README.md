@@ -1,11 +1,13 @@
 # Notebooks
 
-These notebooks are retained as exploratory examples from the original workflow.
+These notebooks are lightweight examples around the package API. They should not contain duplicated algorithm implementations.
 
-Prefer the `pointcloud-etfe` command-line interface or the Python package under `src/` for repeatable processing. The notebooks read workbooks from `../data/raw/` when run from this directory.
+Run them from either the repository root or this `notebooks/` directory. Each notebook adds `../src` or `src` to `sys.path` when needed, reads workbooks from `data/raw/`, and writes generated files to `outputs/notebooks/`.
 
 ## Files
 
-- `Displacement_Calculation.ipynb`: original displacement calculation walkthrough.
-- `Strain_Distribution_Calculation.ipynb`: original strain calculation walkthrough.
-- `Stress_Distribution_Calculation.ipynb`: original stress calculation walkthrough.
+- `Displacement_Calculation.ipynb`: runs the displacement workflow and previews nodal displacement.
+- `Strain_Distribution_Calculation.ipynb`: runs the strain workflow and previews point and element strain.
+- `Stress_Distribution_Calculation.ipynb`: runs the stress workflow and previews point/link stress.
+
+For repeatable production runs, prefer the `pointcloud-etfe` CLI or the workflow functions in `src/pointcloud_etfe_postprocessing/workflows.py`.

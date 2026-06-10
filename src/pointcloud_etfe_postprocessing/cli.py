@@ -4,14 +4,14 @@ import argparse
 from pathlib import Path
 
 from .config import GridConfig, StressConfig, TriangulationConfig
-from .displacement import calculate_displacements
-from .io import ensure_output_dir, list_workbooks, load_points, workbook_label, write_csv
-from .plotting import plot_scalar_field
-from .strain import calculate_strain_distribution
-from .stress import calculate_stress_distribution
-
-DEFAULT_DATA_DIR = Path("data/raw")
-DEFAULT_OUT_DIR = Path("outputs")
+from .workflows import (
+    DEFAULT_DATA_DIR,
+    DEFAULT_OUT_DIR,
+    run_batch_displacement_workflow,
+    run_displacement_workflow,
+    run_strain_workflow,
+    run_stress_workflow,
+)
 
 
 def _grid_from_args(args: argparse.Namespace) -> GridConfig:
@@ -40,93 +40,53 @@ def _add_common_grid_options(parser: argparse.ArgumentParser) -> None:
 
 
 def run_displacement(args: argparse.Namespace) -> list[Path]:
-    out_dir = ensure_output_dir(args.out_dir)
-    reference = load_points(args.reference)
-    target = load_points(args.target)
-    result = calculate_displacements(reference, target, _grid_from_args(args))
-    label = f"{workbook_label(args.target)}_displacement"
-    paths = [write_csv(result, out_dir / f"{label}.csv")]
-    if args.plot:
-        elements = _triangulation_from_args(args).method
-        # Reuse strain triangulation path only when plotting is requested.
-        from .mesh import renumber_grid_points, triangulate_elements
-
-        grid = _grid_from_args(args)
-        target_points = renumber_grid_points(target, grid)
-        tri = triangulate_elements(target_points, grid, _triangulation_from_args(args))
-        paths.append(plot_scalar_field(result, tri, "displacement", out_dir / f"{label}.png", label="Displacement / mm"))
-        _ = elements
-    return paths
+    return run_displacement_workflow(
+        args.reference,
+        args.target,
+        args.out_dir,
+        grid=_grid_from_args(args),
+        triangulation=_triangulation_from_args(args),
+        plot=args.plot,
+    ).paths
 
 
 def run_strain(args: argparse.Namespace) -> list[Path]:
-    out_dir = ensure_output_dir(args.out_dir)
-    reference = load_points(args.reference)
-    target = load_points(args.target)
-    element_strain, point_strain, elements = calculate_strain_distribution(
-        reference,
-        target,
-        _grid_from_args(args),
-        _triangulation_from_args(args),
-    )
-    label = workbook_label(args.target)
-    paths = [
-        write_csv(element_strain, out_dir / f"{label}_element_strain.csv"),
-        write_csv(point_strain, out_dir / f"{label}_point_strain.csv"),
-    ]
-    if args.plot:
-        paths.append(plot_scalar_field(point_strain, elements, "epsilon1", out_dir / f"{label}_epsilon1.png", label="Principal Strain"))
-    return paths
+    return run_strain_workflow(
+        args.reference,
+        args.target,
+        args.out_dir,
+        grid=_grid_from_args(args),
+        triangulation=_triangulation_from_args(args),
+        plot=args.plot,
+    ).paths
 
 
 def run_stress(args: argparse.Namespace) -> list[Path]:
-    out_dir = ensure_output_dir(args.out_dir)
-    points = load_points(args.input)
-    point_stress, links_x, links_y, elements = calculate_stress_distribution(
-        points,
-        _grid_from_args(args),
-        _triangulation_from_args(args, default_scale=1.8),
-        StressConfig(
+    return run_stress_workflow(
+        args.input,
+        args.out_dir,
+        grid=_grid_from_args(args),
+        triangulation=_triangulation_from_args(args, default_scale=1.8),
+        stress=StressConfig(
             pressure_mpa=args.pressure_mpa,
             thickness_mm=args.thickness_mm,
             normal_radius=args.normal_radius,
             normal_max_nn=args.normal_max_nn,
             link_angle_exclusion_deg=args.link_angle_exclusion,
         ),
-    )
-    label = workbook_label(args.input)
-    paths = [
-        write_csv(point_stress, out_dir / f"{label}_point_stress.csv"),
-        write_csv(links_x, out_dir / f"{label}_links_x_stress.csv"),
-        write_csv(links_y, out_dir / f"{label}_links_y_stress.csv"),
-    ]
-    if args.plot:
-        paths.append(
-            plot_scalar_field(
-                point_stress,
-                elements,
-                "mises_stress",
-                out_dir / f"{label}_mises_stress.png",
-                label="Mises Stress / MPa",
-            )
-        )
-    return paths
+        plot=args.plot,
+    ).paths
 
 
 def run_batch(args: argparse.Namespace) -> list[Path]:
-    data_dir = Path(args.data_dir)
-    reference_path = Path(args.reference) if args.reference else data_dir / "zxt_300Pa.xlsx"
-    outputs: list[Path] = []
-    for workbook in list_workbooks(data_dir):
-        if workbook.resolve() == reference_path.resolve():
-            continue
-        if "failure" in workbook.stem.lower():
-            continue
-        target_args = argparse.Namespace(**vars(args))
-        target_args.reference = reference_path
-        target_args.target = workbook
-        outputs.extend(run_displacement(target_args))
-    return outputs
+    return run_batch_displacement_workflow(
+        args.data_dir,
+        args.out_dir,
+        reference_path=args.reference,
+        grid=_grid_from_args(args),
+        triangulation=_triangulation_from_args(args),
+        plot=args.plot,
+    ).paths
 
 
 def build_parser() -> argparse.ArgumentParser:
